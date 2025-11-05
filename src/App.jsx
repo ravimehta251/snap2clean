@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { lookupDistrictEmail } from './districts.js' // Ensure this file exists
+import { lookupDistrictEmail } from './districts.js' // Make sure this file exists
 
-// --- (All your helper functions are unchanged) ---
-
-// Load EmailJS in the browser from CDN and init with a public key
+// --- Load EmailJS from CDN ---
 const emailjsCdn = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js'
 function useEmailJs(publicKey) {
   useEffect(() => {
@@ -20,6 +18,7 @@ function useEmailJs(publicKey) {
   }, [publicKey])
 }
 
+// --- Location Utilities ---
 async function getBrowserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('no geo'))
@@ -40,7 +39,7 @@ async function reverseGeocode(lat, lon) {
   return { district, address: j?.display_name }
 }
 
-// Upload image to ImgBB and return the image URL
+// --- Upload to ImgBB ---
 const IMGBB_KEY = '76c8edaa0a93fcd7552a9243a82732dd'
 async function uploadToImgbb(file) {
   const fd = new FormData()
@@ -50,17 +49,15 @@ async function uploadToImgbb(file) {
     body: fd
   })
   if (!res.ok) throw new Error('img upload failed')
-  return await res.json() // { data: { url, display_url, ... } }
+  return await res.json()
 }
 
-// --- (End of helper functions) ---
-
-
+// --- MAIN APP ---
 export default function App() {
-  // --- (All your state and logic are unchanged) ---
   const [serviceId] = useState('service_3ja5sr5')
   const [templateId] = useState('template_iejrc8b')
   const PUBLIC_KEY = 'y_ng38gqsTyNu7kKr'
+
   const [fromEmail, setFromEmail] = useState('')
   const [photo, setPhoto] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
@@ -68,13 +65,19 @@ export default function App() {
   const [lon, setLon] = useState('')
   const [district, setDistrict] = useState('')
   const [authorityEmail, setAuthorityEmail] = useState('')
+  const [description, setDescription] = useState('') // 🆕 Added field for description
   const [status, setStatus] = useState('')
   const [sending, setSending] = useState(false)
   const formRef = useRef(null)
+
   useEmailJs(PUBLIC_KEY)
 
-  const mapsLink = useMemo(() => (lat && lon ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : ''), [lat, lon]) // Fixed maps link format
+  const mapsLink = useMemo(
+    () => (lat && lon ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : ''),
+    [lat, lon]
+  )
 
+  // --- Handle Image Selection ---
   function onPickPhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -85,6 +88,7 @@ export default function App() {
     handleAutoLocation()
   }
 
+  // --- Handle Location ---
   async function handleAutoLocation() {
     setStatus('Capturing GPS…')
     try {
@@ -102,6 +106,7 @@ export default function App() {
     }
   }
 
+  // --- Handle Send Email ---
   async function onSend(e) {
     e.preventDefault()
     if (!photo) { setStatus('Attach a photo'); return }
@@ -109,7 +114,10 @@ export default function App() {
     const recipient = authorityEmail || 'snap2clean@gmail.com'
     if (!recipient) { setStatus('No recipient email configured'); return }
     try {
-      setSending(true); setStatus('Uploading photo…')
+      setSending(true)
+      setStatus('Uploading photo…')
+
+      // Upload Image
       let imageUrl = ''
       try {
         const upload = await uploadToImgbb(photo)
@@ -118,35 +126,38 @@ export default function App() {
         console.error('ImgBB upload failed:', upErr)
       }
 
-      setStatus('Sending…')
+      if (!imageUrl) {
+        setStatus('Image upload failed. Complaint not sent.')
+        setSending(false)
+        return
+      }
+
+      // Send Email
+      if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
+        setStatus('Email service not loaded. Try again.')
+        setSending(false)
+        return
+      }
+
       const vars = {
         from_email: fromEmail,
         latitude: lat,
         longitude: lon,
         district,
+        description, // 🆕 Include description in email template
         maps_link: mapsLink,
         timestamp: new Date().toISOString(),
         image_url: imageUrl,
-        // Provide an HTML snippet so EmailJS templates can embed the image inline
-        // Use this in your template as: {{{image_html}}} (triple-stash to allow HTML)
         image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
       }
-        // 1) Upload image and REQUIRE success before continuing
-        if (!imageUrl) {
-          setStatus('Image upload failed. Complaint not sent.')
-          setSending(false)
-          return // Abort send if upload fails
-        }
-        // 2) Now proceed to send the complaint (image is uploaded)
-        // Ensure EmailJS script has loaded and exposed the API
-        if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
-          setStatus('Email service not loaded. Try again.')
-          setSending(false)
-          return
-        }
-        // eslint-disable-next-line no-undef
-        await emailjs.send(serviceId, templateId, vars)
-        setStatus('Complaint sent.')
+
+      // eslint-disable-next-line no-undef
+      await emailjs.send(serviceId, templateId, vars)
+      setStatus('Complaint sent successfully!')
+      setFromEmail('')
+      setDescription('')
+      setPhoto(null)
+      setPreviewUrl('')
     } catch (err) {
       console.error('Email send error:', err)
       const msg = err?.text || err?.message || 'unknown error'
@@ -155,46 +166,25 @@ export default function App() {
       setSending(false)
     }
   }
-  
-  // --- (End of state and logic) ---
 
-
-  // --- 🎨 NEW: Helper for styling elements with nature colors ---
-
-  // Reusable styles for inputs
+  // --- UI Styling ---
   const inputStyle = "block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-colors"
   const readOnlyInputStyle = "block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600 shadow-sm focus:outline-none"
-  
-  // Reusable styles for buttons
   const baseButton = "w-full text-white rounded-md px-4 py-3 font-semibold shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-  // Nature-themed buttons: a calm green and a slightly darker green
   const natureButton1 = `${baseButton} bg-green-700 hover:bg-green-800 focus:ring-green-600`
   const natureButton2 = `${baseButton} bg-lime-600 hover:bg-lime-700 focus:ring-lime-500`
 
-  // Helper function to determine status message color
   const getStatusClasses = () => {
-    if (!status) return 'hidden' // Hide if no status
-    
-    if (status.includes('failed') || status.includes('try again')) {
-      return 'bg-red-100 text-red-800' // Keep red for errors (universal meaning)
-    }
-    if (status.includes('Complaint sent')) {
-      return 'bg-green-100 text-green-800' // Green for success
-    }
-    if (status.includes('no email configured')) {
-      return 'bg-yellow-100 text-yellow-800' // Yellow for warnings
-    }
-    // Any other in-progress message
-    return 'bg-green-50 text-green-700' // Light green for info/loading
+    if (!status) return 'hidden'
+    if (status.includes('failed') || status.includes('try again')) return 'bg-red-100 text-red-800'
+    if (status.includes('successfully')) return 'bg-green-100 text-green-800'
+    if (status.includes('no email configured')) return 'bg-yellow-100 text-yellow-800'
+    return 'bg-green-50 text-green-700'
   }
 
-  // --- 🎨 NEW: Render with improved CSS ---
-
+  // --- UI Layout ---
   return (
-    // Page wrapper with a light, earthy background color
     <div className="min-h-screen bg-emerald-50 text-gray-800 py-8 sm:py-12 px-4 font-sans">
-      
-      {/* The main content card */}
       <div className="max-w-xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-green-100">
         
         <h1 className="text-3xl font-bold text-green-800 mb-2 text-center">
@@ -211,17 +201,32 @@ export default function App() {
           </label>
           <input 
             id="fromEmail"
-            className={inputStyle} 
-            value={fromEmail} 
-            onChange={e=>setFromEmail(e.target.value)} 
+            className={inputStyle}
+            value={fromEmail}
+            onChange={e=>setFromEmail(e.target.value)}
             placeholder="you@example.com"
           />
+        </div>
+
+        {/* Description Field */}
+        <div className="mb-6">
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+            Description (Optional)
+          </label>
+          <textarea
+            id="description"
+            className={`${inputStyle} resize-none`}
+            rows="3"
+            placeholder="Describe the issue (e.g., garbage pile near school gate)"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          ></textarea>
         </div>
 
         {/* Main Form */}
         <form ref={formRef} onSubmit={onSend} className="space-y-6">
           
-          {/* Custom File Input */}
+          {/* Photo Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Photo of the Issue
@@ -230,21 +235,19 @@ export default function App() {
               htmlFor="photo" 
               className="w-full flex flex-col items-center px-4 py-5 bg-white border-2 border-green-300 border-dashed rounded-md shadow-sm cursor-pointer hover:bg-green-50 transition-colors"
             >
-              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
               <span className="mt-2 text-sm text-green-700">
                 {photo ? photo.name : 'Click or drag an image here (Max 5MB)'}
               </span>
-              <span className="text-xs text-gray-500">
-                This will also capture your location
-              </span>
+              <span className="text-xs text-gray-500">This will also capture your location</span>
               <input 
-                id="photo" 
-                name="photo" 
-                type="file" 
-                className="sr-only" // This hides the ugly default input
-                accept="image/*" 
-                capture="environment" 
-                onChange={onPickPhoto} 
+                id="photo"
+                name="photo"
+                type="file"
+                className="sr-only"
+                accept="image/*"
+                capture="environment"
+                onChange={onPickPhoto}
               />
             </label>
             {previewUrl && (
@@ -252,7 +255,7 @@ export default function App() {
             )}
           </div>
 
-          {/* Location/District Info (Responsive Grid) */}
+          {/* Location Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
@@ -272,21 +275,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Action Buttons (Responsive Flex) */}
+          {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 pt-2">
-            <button 
-              type="button" 
-              onClick={handleAutoLocation} 
-              className={natureButton1}
-              title="Manually re-capture your location if needed"
-            >
+            <button type="button" onClick={handleAutoLocation} className={natureButton1}>
               Refresh Location
             </button>
-            <button 
-              type="submit" 
-              disabled={sending} 
-              className={natureButton2}
-            >
+            <button type="submit" disabled={sending} className={natureButton2}>
               {sending ? 'Sending...' : 'Send Complaint'}
             </button>
           </div>
@@ -301,12 +295,8 @@ export default function App() {
 
         {/* Google Maps Link */}
         {mapsLink && (
-          <a 
-            className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4" 
-            href={mapsLink} 
-            target="_blank" 
-            rel="noreferrer"
-          >
+          <a className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4"
+             href={mapsLink} target="_blank" rel="noreferrer">
             View on Google Maps
           </a>
         )}
