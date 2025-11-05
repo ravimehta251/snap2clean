@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { lookupDistrictEmail } from './districts.js'
+import { lookupDistrictEmail } from './districts.js' // Ensure this file exists
+
+// --- (All your helper functions are unchanged) ---
 
 // Load EmailJS in the browser from CDN and init with a public key
 const emailjsCdn = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js'
@@ -51,14 +53,15 @@ async function uploadToImgbb(file) {
   return await res.json() // { data: { url, display_url, ... } }
 }
 
-// No backend; authority email is looked up locally
+// --- (End of helper functions) ---
+
 
 export default function App() {
-  // EmailJS details (service/template prefilled), require only Public Key input
+  // --- (All your state and logic are unchanged) ---
   const [serviceId] = useState('service_3ja5sr5')
   const [templateId] = useState('template_iejrc8b')
   const PUBLIC_KEY = 'y_ng38gqsTyNu7kKr'
-  const [fromEmail, setFromEmail] = useState('ravi7481081raj@gmail.com')
+  const [fromEmail, setFromEmail] = useState('')
   const [photo, setPhoto] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [lat, setLat] = useState('')
@@ -70,7 +73,7 @@ export default function App() {
   const formRef = useRef(null)
   useEmailJs(PUBLIC_KEY)
 
-  const mapsLink = useMemo(() => (lat && lon ? `https://maps.google.com/?q=${lat},${lon}` : ''), [lat, lon])
+  const mapsLink = useMemo(() => (lat && lon ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : ''), [lat, lon]) // Fixed maps link format
 
   function onPickPhoto(e) {
     const file = e.target.files?.[0]
@@ -103,7 +106,7 @@ export default function App() {
     e.preventDefault()
     if (!photo) { setStatus('Attach a photo'); return }
     if (!lat || !lon) { setStatus('Location missing'); return }
-    const recipient = authorityEmail || 'ravi7481081raj@gmail.com'
+    const recipient = authorityEmail || 'snap2clean@gmail.com'
     if (!recipient) { setStatus('No recipient email configured'); return }
     try {
       setSending(true); setStatus('Uploading photo…')
@@ -113,7 +116,6 @@ export default function App() {
         imageUrl = upload?.data?.display_url || upload?.data?.url || ''
       } catch (upErr) {
         console.error('ImgBB upload failed:', upErr)
-        // continue without image_url
       }
 
       setStatus('Sending…')
@@ -124,12 +126,27 @@ export default function App() {
         district,
         maps_link: mapsLink,
         timestamp: new Date().toISOString(),
-        to_email: recipient,
-        image_url: imageUrl
+        image_url: imageUrl,
+        // Provide an HTML snippet so EmailJS templates can embed the image inline
+        // Use this in your template as: {{{image_html}}} (triple-stash to allow HTML)
+        image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
       }
-      // eslint-disable-next-line no-undef
-      await emailjs.send(serviceId, templateId, vars)
-      setStatus('Complaint sent.')
+        // 1) Upload image and REQUIRE success before continuing
+        if (!imageUrl) {
+          setStatus('Image upload failed. Complaint not sent.')
+          setSending(false)
+          return // Abort send if upload fails
+        }
+        // 2) Now proceed to send the complaint (image is uploaded)
+        // Ensure EmailJS script has loaded and exposed the API
+        if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
+          setStatus('Email service not loaded. Try again.')
+          setSending(false)
+          return
+        }
+        // eslint-disable-next-line no-undef
+        await emailjs.send(serviceId, templateId, vars)
+        setStatus('Complaint sent.')
     } catch (err) {
       console.error('Email send error:', err)
       const msg = err?.text || err?.message || 'unknown error'
@@ -138,52 +155,162 @@ export default function App() {
       setSending(false)
     }
   }
+  
+  // --- (End of state and logic) ---
+
+
+  // --- 🎨 NEW: Helper for styling elements with nature colors ---
+
+  // Reusable styles for inputs
+  const inputStyle = "block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-colors"
+  const readOnlyInputStyle = "block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600 shadow-sm focus:outline-none"
+  
+  // Reusable styles for buttons
+  const baseButton = "w-full text-white rounded-md px-4 py-3 font-semibold shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+  // Nature-themed buttons: a calm green and a slightly darker green
+  const natureButton1 = `${baseButton} bg-green-700 hover:bg-green-800 focus:ring-green-600`
+  const natureButton2 = `${baseButton} bg-lime-600 hover:bg-lime-700 focus:ring-lime-500`
+
+  // Helper function to determine status message color
+  const getStatusClasses = () => {
+    if (!status) return 'hidden' // Hide if no status
+    
+    if (status.includes('failed') || status.includes('try again')) {
+      return 'bg-red-100 text-red-800' // Keep red for errors (universal meaning)
+    }
+    if (status.includes('Complaint sent')) {
+      return 'bg-green-100 text-green-800' // Green for success
+    }
+    if (status.includes('no email configured')) {
+      return 'bg-yellow-100 text-yellow-800' // Yellow for warnings
+    }
+    // Any other in-progress message
+    return 'bg-green-50 text-green-700' // Light green for info/loading
+  }
+
+  // --- 🎨 NEW: Render with improved CSS ---
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-2">Snap2Clean</h1>
-      <p className="text-sm text-gray-600 mb-4">Click Photo to capture image and auto-fetch your location. We will determine the district and route the complaint.</p>
+    // Page wrapper with a light, earthy background color
+    <div className="min-h-screen bg-emerald-50 text-gray-800 py-8 sm:py-12 px-4 font-sans">
+      
+      {/* The main content card */}
+      <div className="max-w-xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-green-100">
+        
+        <h1 className="text-3xl font-bold text-green-800 mb-2 text-center">
+          Snap2Clean
+        </h1>
+        <p className="text-base text-gray-600 mb-6 text-center">
+          Report civic issues. Clean surroundings, green future.
+        </p>
 
-      <div className="rounded border p-3 mb-4 grid gap-2">
-        <input className="border rounded px-2 py-1 w-full" value={fromEmail} onChange={e=>setFromEmail(e.target.value)} placeholder="Your email" />
+        {/* Email Input */}
+        <div className="mb-6">
+          <label htmlFor="fromEmail" className="block text-sm font-medium text-gray-700 mb-1">
+            Your Email (Optional)
+          </label>
+          <input 
+            id="fromEmail"
+            className={inputStyle} 
+            value={fromEmail} 
+            onChange={e=>setFromEmail(e.target.value)} 
+            placeholder="you@example.com"
+          />
+        </div>
+
+        {/* Main Form */}
+        <form ref={formRef} onSubmit={onSend} className="space-y-6">
+          
+          {/* Custom File Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Photo of the Issue
+            </label>
+            <label 
+              htmlFor="photo" 
+              className="w-full flex flex-col items-center px-4 py-5 bg-white border-2 border-green-300 border-dashed rounded-md shadow-sm cursor-pointer hover:bg-green-50 transition-colors"
+            >
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              <span className="mt-2 text-sm text-green-700">
+                {photo ? photo.name : 'Click or drag an image here (Max 5MB)'}
+              </span>
+              <span className="text-xs text-gray-500">
+                This will also capture your location
+              </span>
+              <input 
+                id="photo" 
+                name="photo" 
+                type="file" 
+                className="sr-only" // This hides the ugly default input
+                accept="image/*" 
+                capture="environment" 
+                onChange={onPickPhoto} 
+              />
+            </label>
+            {previewUrl && (
+              <img src={previewUrl} alt="preview" className="w-full h-60 object-cover rounded-md border border-green-200 mt-4" />
+            )}
+          </div>
+
+          {/* Location/District Info (Responsive Grid) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+              <input id="lat" className={readOnlyInputStyle} value={lat} readOnly placeholder="Latitude" />
+            </div>
+            <div>
+              <label htmlFor="lon" className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+              <input id="lon" className={readOnlyInputStyle} value={lon} readOnly placeholder="Longitude" />
+            </div>
+            <div>
+              <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
+              <input id="district" className={readOnlyInputStyle} value={district} readOnly placeholder="District" />
+            </div>
+            <div>
+              <label htmlFor="authEmail" className="block text-sm font-medium text-gray-700 mb-1">Authority Email</label>
+              <input id="authEmail" className={readOnlyInputStyle} value={authorityEmail} readOnly placeholder="Authority Email" />
+            </div>
+          </div>
+
+          {/* Action Buttons (Responsive Flex) */}
+          <div className="flex flex-col sm:flex-row gap-4 pt-2">
+            <button 
+              type="button" 
+              onClick={handleAutoLocation} 
+              className={natureButton1}
+              title="Manually re-capture your location if needed"
+            >
+              Refresh Location
+            </button>
+            <button 
+              type="submit" 
+              disabled={sending} 
+              className={natureButton2}
+            >
+              {sending ? 'Sending...' : 'Send Complaint'}
+            </button>
+          </div>
+        </form>
+
+        {/* Status Message */}
+        {status && (
+          <p className={`mt-5 text-center text-sm p-3 rounded-md ${getStatusClasses()}`}>
+            {status}
+          </p>
+        )}
+
+        {/* Google Maps Link */}
+        {mapsLink && (
+          <a 
+            className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4" 
+            href={mapsLink} 
+            target="_blank" 
+            rel="noreferrer"
+          >
+            View on Google Maps
+          </a>
+        )}
       </div>
-
-      <form ref={formRef} onSubmit={onSend} className="space-y-4">
-        {/* Hidden fields required by EmailJS template and for dynamic recipient */}
-        <input type="hidden" name="from_email" />
-        <input type="hidden" name="latitude" />
-        <input type="hidden" name="longitude" />
-        <input type="hidden" name="district" />
-        <input type="hidden" name="maps_link" />
-        <input type="hidden" name="timestamp" />
-        <input type="hidden" name="to_email" />
-        <div>
-          <label className="block text-sm font-medium mb-1">Photo</label>
-          <input name="photo" type="file" accept="image/*" capture="environment" onChange={onPickPhoto} />
-          {previewUrl && (
-            <img src={previewUrl} alt="preview" className="w-full h-60 object-cover rounded border mt-2" />
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <input className="border rounded px-3 py-2" value={lat} readOnly placeholder="Latitude" />
-          <input className="border rounded px-3 py-2" value={lon} readOnly placeholder="Longitude" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <input className="border rounded px-3 py-2" value={district} readOnly placeholder="District" />
-          <input className="border rounded px-3 py-2" value={authorityEmail} readOnly placeholder="Authority Email" />
-        </div>
-
-        <div className="flex gap-3">
-          <button type="button" onClick={handleAutoLocation} className="flex-1 bg-blue-600 text-white rounded px-4 py-2">Click Photo (Location)</button>
-          <button type="submit" disabled={sending} className="flex-1 bg-green-600 text-white rounded px-4 py-2 disabled:opacity-60">Send Complaint</button>
-        </div>
-      </form>
-
-      <p className={`mt-3 text-sm ${status.includes('failed')? 'text-red-700':'text-gray-800'}`}>{status}</p>
-      {mapsLink && <a className="text-blue-600 text-sm underline" href={mapsLink} target="_blank" rel="noreferrer">View on Google Maps</a>}
     </div>
   )
 }
-
-

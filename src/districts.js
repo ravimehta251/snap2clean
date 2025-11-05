@@ -2,7 +2,7 @@
 // Update emails as needed; normalization will match common variants.
 export const karnatakaDistrictEmails = [
   'Bagalkote','Ballari','Belagavi','Bengaluru Rural','Bengaluru Urban','Bidar','Vijayapura','Chamarajanagar','Chikkaballapur','Chikkamagaluru','Chitradurga','Dakshina Kannada','Davanagere','Dharwad','Gadag','Hassan','Haveri','Kalaburagi','Kodagu','Kolar','Koppal','Mandya','Mysuru','Raichur','Ramanagara','Shivamogga','Tumakuru','Udupi','Uttara Kannada','Yadgir','Vijayanagara'
-].map(d => ({ district: d, email: 'ravi7481081raj@gmail.com' }))
+].map(d => ({ district: d, email: 'snap2clean@gmail.com' }))
 
 export function normalizeDistrict(name = '') {
   return name
