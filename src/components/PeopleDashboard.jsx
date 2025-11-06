@@ -1,5 +1,7 @@
+// PeopleDashboard.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { lookupDistrictEmail } from './districts.js' // Make sure this file exists
+import { lookupDistrictEmail } from '../districts.js'
+import { createClient } from '@supabase/supabase-js'
 
 // --- Load EmailJS from CDN ---
 const emailjsCdn = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js'
@@ -52,8 +54,13 @@ async function uploadToImgbb(file) {
   return await res.json()
 }
 
-// --- MAIN APP ---
-export default function App() {
+// --- Supabase client ---
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// --- MAIN COMPONENT ---
+export default function PeopleDashboard() {
   const [serviceId] = useState('service_3ja5sr5')
   const [templateId] = useState('template_iejrc8b')
   const PUBLIC_KEY = 'y_ng38gqsTyNu7kKr'
@@ -65,7 +72,8 @@ export default function App() {
   const [lon, setLon] = useState('')
   const [district, setDistrict] = useState('')
   const [authorityEmail, setAuthorityEmail] = useState('')
-  const [description, setDescription] = useState('') // 🆕 Added field for description
+  const [category, setCategory] = useState('')
+  const [description, setDescription] = useState('')
   const [status, setStatus] = useState('')
   const [sending, setSending] = useState(false)
   const formRef = useRef(null)
@@ -111,8 +119,12 @@ export default function App() {
     e.preventDefault()
     if (!photo) { setStatus('Attach a photo'); return }
     if (!lat || !lon) { setStatus('Location missing'); return }
+    if (!category) { setStatus('Select complaint category'); return }
+    if (!description || !description.trim()) { setStatus('Description is required'); return }
+
     const recipient = authorityEmail || 'snap2clean@gmail.com'
     if (!recipient) { setStatus('No recipient email configured'); return }
+
     try {
       setSending(true)
       setStatus('Uploading photo…')
@@ -132,36 +144,66 @@ export default function App() {
         return
       }
 
-      // Send Email
-      if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
-        setStatus('Email service not loaded. Try again.')
-        setSending(false)
-        return
-      }
-
+      // --- EmailJS Variables ---
       const vars = {
         from_email: fromEmail,
         latitude: lat,
         longitude: lon,
+        category, // ✅ send to email
         district,
-        description, // 🆕 Include description in email template
+        description,
         maps_link: mapsLink,
         timestamp: new Date().toISOString(),
         image_url: imageUrl,
         image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
       }
 
-      // eslint-disable-next-line no-undef
-      await emailjs.send(serviceId, templateId, vars)
-      setStatus('Complaint sent successfully!')
-      setFromEmail('')
-      setDescription('')
-      setPhoto(null)
-      setPreviewUrl('')
+      console.log("EmailJS vars:", vars)
+
+      if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
+        setStatus('Email service not loaded. Try again.')
+        setSending(false)
+        return
+      }
+
+  // eslint-disable-next-line no-undef
+  const emailResult = await emailjs.send(serviceId, templateId, vars)
+  console.log('EmailJS send result:', emailResult)
+  setStatus('Complaint sent successfully! Saving to database...')
+
+      // --- Save to Supabase ---
+      const { data, error } = await supabase
+        .from('complaints')
+        .insert({
+          from_email: fromEmail,
+          latitude: lat,
+          longitude: lon,
+          district,
+          category,
+          description,
+          maps_link: mapsLink,
+          timestamp: new Date().toISOString(),
+          image_url: imageUrl
+        })
+        .select('id')
+        .single()
+
+      if (error) {
+        console.error('Supabase insert error:', error)
+        setStatus(`Complaint sent but failed saving: ${error.message}`)
+      } else if (data && data.id) {
+        setStatus(`Complaint saved successfully! ID: ${data.id}`)
+        setFromEmail('')
+        setDescription('')
+        setCategory('')
+        setPhoto(null)
+        setPreviewUrl('')
+      } else {
+        setStatus('Complaint sent, but failed to get saved ID.')
+      }
     } catch (err) {
       console.error('Email send error:', err)
-      const msg = err?.text || err?.message || 'unknown error'
-      setStatus(`Send failed: ${msg}`)
+      setStatus(`Send failed: ${err.message || 'unknown error'}`)
     } finally {
       setSending(false)
     }
@@ -208,98 +250,55 @@ export default function App() {
           />
         </div>
 
-        {/* Description Field */}
-        <div className="mb-6">
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Description (Optional)
-          </label>
-          <textarea
-            id="description"
-            className={`${inputStyle} resize-none`}
-            rows="3"
-            placeholder="Describe the issue (e.g., garbage pile near school gate)"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-          ></textarea>
-        </div>
-
-        {/* Main Form */}
         <form ref={formRef} onSubmit={onSend} className="space-y-6">
-          
           {/* Photo Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Photo of the Issue
-            </label>
-            <label 
-              htmlFor="photo" 
-              className="w-full flex flex-col items-center px-4 py-5 bg-white border-2 border-green-300 border-dashed rounded-md shadow-sm cursor-pointer hover:bg-green-50 transition-colors"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-1">Photo of the Issue</label>
+            <label htmlFor="photo" className="w-full flex flex-col items-center px-4 py-5 bg-white border-2 border-green-300 border-dashed rounded-md shadow-sm cursor-pointer hover:bg-green-50 transition-colors">
               <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              <span className="mt-2 text-sm text-green-700">
-                {photo ? photo.name : 'Click or drag an image here (Max 5MB)'}
-              </span>
+              <span className="mt-2 text-sm text-green-700">{photo ? photo.name : 'Click or drag an image here (Max 5MB)'}</span>
               <span className="text-xs text-gray-500">This will also capture your location</span>
-              <input 
-                id="photo"
-                name="photo"
-                type="file"
-                className="sr-only"
-                accept="image/*"
-                capture="environment"
-                onChange={onPickPhoto}
-              />
+              <input id="photo" name="photo" type="file" className="sr-only" accept="image/*" capture="environment" onChange={onPickPhoto}/>
             </label>
-            {previewUrl && (
-              <img src={previewUrl} alt="preview" className="w-full h-60 object-cover rounded-md border border-green-200 mt-4" />
-            )}
+            {previewUrl && (<img src={previewUrl} alt="preview" className="w-full h-60 object-cover rounded-md border border-green-200 mt-4" />)}
           </div>
 
-          {/* Location Info */}
+          {/* Category */}
+          <div>
+            <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Complaint Category <span className="text-red-600">*</span></label>
+            <select id="category" value={category} onChange={e=>setCategory(e.target.value)} className={inputStyle} required>
+              <option value="">Select category</option>
+              <option value="Dry Waste">Dry Waste</option>
+              <option value="Wet Waste">Wet Waste</option>
+              <option value="Medical Waste">Medical Waste</option>
+              <option value="Pothole">Pothole</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-red-600">*</span></label>
+            <textarea id="description" className={`${inputStyle} resize-none`} rows="3" placeholder="Describe the issue (e.g., garbage pile near school gate)" value={description} onChange={e=>setDescription(e.target.value)} required></textarea>
+          </div>
+
+          {/* Location */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
-              <input id="lat" className={readOnlyInputStyle} value={lat} readOnly placeholder="Latitude" />
-            </div>
-            <div>
-              <label htmlFor="lon" className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
-              <input id="lon" className={readOnlyInputStyle} value={lon} readOnly placeholder="Longitude" />
-            </div>
-            <div>
-              <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
-              <input id="district" className={readOnlyInputStyle} value={district} readOnly placeholder="District" />
-            </div>
-            <div>
-              <label htmlFor="authEmail" className="block text-sm font-medium text-gray-700 mb-1">Authority Email</label>
-              <input id="authEmail" className={readOnlyInputStyle} value={authorityEmail} readOnly placeholder="Authority Email" />
-            </div>
+            <div><label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">Latitude</label><input id="lat" className={readOnlyInputStyle} value={lat} readOnly placeholder="Latitude" /></div>
+            <div><label htmlFor="lon" className="block text-sm font-medium text-gray-700 mb-1">Longitude</label><input id="lon" className={readOnlyInputStyle} value={lon} readOnly placeholder="Longitude" /></div>
+            <div><label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label><input id="district" className={readOnlyInputStyle} value={district} readOnly placeholder="District" /></div>
+            <div><label htmlFor="authEmail" className="block text-sm font-medium text-gray-700 mb-1">Authority Email</label><input id="authEmail" className={readOnlyInputStyle} value={authorityEmail} readOnly placeholder="Authority Email" /></div>
           </div>
 
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 pt-2">
-            <button type="button" onClick={handleAutoLocation} className={natureButton1}>
-              Refresh Location
-            </button>
-            <button type="submit" disabled={sending} className={natureButton2}>
-              {sending ? 'Sending...' : 'Send Complaint'}
-            </button>
+            <button type="button" onClick={handleAutoLocation} className={natureButton1}>Refresh Location</button>
+            <button type="submit" disabled={sending} className={natureButton2}>{sending ? 'Sending...' : 'Send Complaint'}</button>
           </div>
         </form>
 
-        {/* Status Message */}
-        {status && (
-          <p className={`mt-5 text-center text-sm p-3 rounded-md ${getStatusClasses()}`}>
-            {status}
-          </p>
-        )}
-
-        {/* Google Maps Link */}
-        {mapsLink && (
-          <a className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4"
-             href={mapsLink} target="_blank" rel="noreferrer">
-            View on Google Maps
-          </a>
-        )}
+        {status && <p className={`mt-5 text-center text-sm p-3 rounded-md ${getStatusClasses()}`}>{status}</p>}
+        {mapsLink && <a className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4" href={mapsLink} target="_blank" rel="noreferrer">View on Google Maps</a>}
       </div>
     </div>
   )
