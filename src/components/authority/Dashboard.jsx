@@ -209,7 +209,7 @@ export default function Dashboard() {
                 <div className="p-4 flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                      <div>
-                       <h3 className="font-bold text-gray-800">{c.formatted_id || `#${c.id}`}</h3>
+                       <h3 className="font-bold text-gray-800">ID: {c.formatted_id || `#${c.id}`}</h3>
                        <p className="text-xs text-gray-500">{c.district || 'Unknown Location'}</p>
                      </div>
                      {/* Status Badge (Static display when not editing is sometimes cleaner, but dropdown is functional) */}

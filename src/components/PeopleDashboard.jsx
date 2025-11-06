@@ -114,7 +114,7 @@ export default function PeopleDashboard() {
     }
   }
 
-  // --- Handle Send Email ---
+  // --- Handle Send Email & Save ---
   async function onSend(e) {
     e.preventDefault()
     if (!photo) { setStatus('Attach a photo'); return }
@@ -129,7 +129,7 @@ export default function PeopleDashboard() {
       setSending(true)
       setStatus('Uploading photo…')
 
-      // Upload Image
+      // 1. Upload Image
       let imageUrl = ''
       try {
         const upload = await uploadToImgbb(photo)
@@ -144,35 +144,10 @@ export default function PeopleDashboard() {
         return
       }
 
-      // --- EmailJS Variables ---
-      const vars = {
-        from_email: fromEmail,
-        latitude: lat,
-        longitude: lon,
-        category, // ✅ send to email
-        district,
-        description,
-        maps_link: mapsLink,
-        timestamp: new Date().toISOString(),
-        image_url: imageUrl,
-        image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
-      }
+      setStatus('Saving to database...')
 
-      console.log("EmailJS vars:", vars)
-
-      if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
-        setStatus('Email service not loaded. Try again.')
-        setSending(false)
-        return
-      }
-
-  // eslint-disable-next-line no-undef
-  const emailResult = await emailjs.send(serviceId, templateId, vars)
-  console.log('EmailJS send result:', emailResult)
-  setStatus('Complaint sent successfully! Saving to database...')
-
-      // --- Save to Supabase ---
-      const { data, error } = await supabase
+      // 2. Save to Supabase FIRST to get the ID
+      const { data: dbData, error: dbError } = await supabase
         .from('complaints')
         .insert({
           from_email: fromEmail,
@@ -185,25 +160,58 @@ export default function PeopleDashboard() {
           timestamp: new Date().toISOString(),
           image_url: imageUrl
         })
-        .select('id')
+        .select('formatted_id') // ✅ Fetch the generated formatted_id
         .single()
 
-      if (error) {
-        console.error('Supabase insert error:', error)
-        setStatus(`Complaint sent but failed saving: ${error.message}`)
-      } else if (data && data.id) {
-        setStatus(`Complaint saved successfully! ID: ${data.id}`)
-        setFromEmail('')
-        setDescription('')
-        setCategory('')
-        setPhoto(null)
-        setPreviewUrl('')
-      } else {
-        setStatus('Complaint sent, but failed to get saved ID.')
+      if (dbError || !dbData) {
+        console.error('Supabase insert error:', dbError)
+        throw new Error(dbError?.message || 'Database save failed')
       }
+
+      const complaintId = dbData.formatted_id
+      setStatus(`Saved as ${complaintId}. Sending email...`)
+
+      // 3. Prepare EmailJS Variables (now including complaint_id)
+      const vars = {
+        complaint_id: complaintId, // ✅ Added to email variables
+        from_email: fromEmail,
+        latitude: lat,
+        longitude: lon,
+        category,
+        district,
+        description,
+        maps_link: mapsLink,
+        timestamp: new Date().toISOString(),
+        image_url: imageUrl,
+        image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
+      }
+
+      console.log("EmailJS vars:", vars)
+
+      if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
+        throw new Error('Email service not loaded.')
+      }
+
+      // 4. Send Email
+      // eslint-disable-next-line no-undef
+      await emailjs.send(serviceId, templateId, vars)
+
+      // 5. Success!
+      setStatus(`Complaint ${complaintId} sent successfully!`)
+      setFromEmail('')
+      setDescription('')
+      setCategory('')
+      setPhoto(null)
+      setPreviewUrl('')
+
     } catch (err) {
-      console.error('Email send error:', err)
-      setStatus(`Send failed: ${err.message || 'unknown error'}`)
+      console.error('Process failed:', err)
+      // If DB worked but email failed, we still show the ID but warn about email
+      if (err.message.includes('Email service') && status.includes('Saved as')) {
+         setStatus(`${status.split('.')[0]}. Email failed to send.`)
+      } else {
+         setStatus(`Failed: ${err.message || 'unknown error'}`)
+      }
     } finally {
       setSending(false)
     }
@@ -218,7 +226,7 @@ export default function PeopleDashboard() {
 
   const getStatusClasses = () => {
     if (!status) return 'hidden'
-    if (status.includes('failed') || status.includes('try again')) return 'bg-red-100 text-red-800'
+    if (status.includes('Failed') || status.includes('failed') || status.includes('try again')) return 'bg-red-100 text-red-800'
     if (status.includes('successfully')) return 'bg-green-100 text-green-800'
     if (status.includes('no email configured')) return 'bg-yellow-100 text-yellow-800'
     return 'bg-green-50 text-green-700'
