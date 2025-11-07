@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { lookupDistrictEmail } from '../districts.js'
 import { createClient } from '@supabase/supabase-js'
+import { useNavigate } from 'react-router-dom'
 
 // --- Load EmailJS from CDN ---
 const emailjsCdn = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js'
@@ -61,6 +62,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // --- MAIN COMPONENT ---
 export default function PeopleDashboard() {
+  const navigate = useNavigate()
+
   const [serviceId] = useState('service_3ja5sr5')
   const [templateId] = useState('template_iejrc8b')
   const PUBLIC_KEY = 'y_ng38gqsTyNu7kKr'
@@ -89,8 +92,8 @@ export default function PeopleDashboard() {
   function onPickPhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { setStatus('Select an image file'); e.target.value=''; return }
-    if (file.size > 5 * 1024 * 1024) { setStatus('Max 5MB image'); e.target.value=''; return }
+    if (!file.type.startsWith('image/')) { setStatus('Select an image file'); e.target.value = ''; return }
+    if (file.size > 5 * 1024 * 1024) { setStatus('Max 5MB image'); e.target.value = ''; return }
     setPhoto(file)
     setPreviewUrl(URL.createObjectURL(file))
     handleAutoLocation()
@@ -108,7 +111,7 @@ export default function PeopleDashboard() {
       setDistrict(rev.district || '')
       const email = lookupDistrictEmail(rev.district || '')
       setAuthorityEmail(email)
-      setStatus(email ? `District: ${rev.district} → ${email}` : `District: ${rev.district} (no email configured)`) 
+      setStatus(email ? `District: ${rev.district} → ${email}` : `District: ${rev.district} (no email configured)`)
     } catch {
       setStatus('Location failed. Allow permission and try again.')
     }
@@ -146,7 +149,7 @@ export default function PeopleDashboard() {
 
       setStatus('Saving to database...')
 
-      // 2. Save to Supabase FIRST to get the ID
+      // 2. Save to Supabase
       const { data: dbData, error: dbError } = await supabase
         .from('complaints')
         .insert({
@@ -160,7 +163,7 @@ export default function PeopleDashboard() {
           timestamp: new Date().toISOString(),
           image_url: imageUrl
         })
-        .select('formatted_id') // ✅ Fetch the generated formatted_id
+        .select('formatted_id')
         .single()
 
       if (dbError || !dbData) {
@@ -171,9 +174,9 @@ export default function PeopleDashboard() {
       const complaintId = dbData.formatted_id
       setStatus(`Saved as ${complaintId}. Sending email...`)
 
-      // 3. Prepare EmailJS Variables (now including complaint_id)
+      // 3. Prepare Email Variables
       const vars = {
-        complaint_id: complaintId, // ✅ Added to email variables
+        complaint_id: complaintId,
         from_email: fromEmail,
         latitude: lat,
         longitude: lon,
@@ -186,8 +189,6 @@ export default function PeopleDashboard() {
         image_html: `<img src="${imageUrl}" alt="Issue photo" style="max-width:600px; height:auto;" />`
       }
 
-      console.log("EmailJS vars:", vars)
-
       if (!(globalThis.emailjs && typeof globalThis.emailjs.send === 'function')) {
         throw new Error('Email service not loaded.')
       }
@@ -196,21 +197,19 @@ export default function PeopleDashboard() {
       // eslint-disable-next-line no-undef
       await emailjs.send(serviceId, templateId, vars)
 
-      // 5. Success!
+      // 5. Success
       setStatus(`Complaint ${complaintId} sent successfully!`)
       setFromEmail('')
       setDescription('')
       setCategory('')
       setPhoto(null)
       setPreviewUrl('')
-
     } catch (err) {
       console.error('Process failed:', err)
-      // If DB worked but email failed, we still show the ID but warn about email
       if (err.message.includes('Email service') && status.includes('Saved as')) {
-         setStatus(`${status.split('.')[0]}. Email failed to send.`)
+        setStatus(`${status.split('.')[0]}. Email failed to send.`)
       } else {
-         setStatus(`Failed: ${err.message || 'unknown error'}`)
+        setStatus(`Failed: ${err.message || 'unknown error'}`)
       }
     } finally {
       setSending(false)
@@ -236,7 +235,7 @@ export default function PeopleDashboard() {
   return (
     <div className="min-h-screen bg-emerald-50 text-gray-800 py-8 sm:py-12 px-4 font-sans">
       <div className="max-w-xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-green-100">
-        
+
         <h1 className="text-3xl font-bold text-green-800 mb-2 text-center">
           Snap2Clean
         </h1>
@@ -249,11 +248,11 @@ export default function PeopleDashboard() {
           <label htmlFor="fromEmail" className="block text-sm font-medium text-gray-700 mb-1">
             Your Email (Optional)
           </label>
-          <input 
+          <input
             id="fromEmail"
             className={inputStyle}
             value={fromEmail}
-            onChange={e=>setFromEmail(e.target.value)}
+            onChange={e => setFromEmail(e.target.value)}
             placeholder="you@example.com"
           />
         </div>
@@ -266,7 +265,7 @@ export default function PeopleDashboard() {
               <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
               <span className="mt-2 text-sm text-green-700">{photo ? photo.name : 'Click or drag an image here (Max 5MB)'}</span>
               <span className="text-xs text-gray-500">This will also capture your location</span>
-              <input id="photo" name="photo" type="file" className="sr-only" accept="image/*" capture="environment" onChange={onPickPhoto}/>
+              <input id="photo" name="photo" type="file" className="sr-only" accept="image/*" capture="environment" onChange={onPickPhoto} />
             </label>
             {previewUrl && (<img src={previewUrl} alt="preview" className="w-full h-60 object-cover rounded-md border border-green-200 mt-4" />)}
           </div>
@@ -274,7 +273,7 @@ export default function PeopleDashboard() {
           {/* Category */}
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Complaint Category <span className="text-red-600">*</span></label>
-            <select id="category" value={category} onChange={e=>setCategory(e.target.value)} className={inputStyle} required>
+            <select id="category" value={category} onChange={e => setCategory(e.target.value)} className={inputStyle} required>
               <option value="">Select category</option>
               <option value="Dry Waste">Dry Waste</option>
               <option value="Wet Waste">Wet Waste</option>
@@ -287,7 +286,7 @@ export default function PeopleDashboard() {
           {/* Description */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-red-600">*</span></label>
-            <textarea id="description" className={`${inputStyle} resize-none`} rows="3" placeholder="Describe the issue (e.g., garbage pile near school gate)" value={description} onChange={e=>setDescription(e.target.value)} required></textarea>
+            <textarea id="description" className={`${inputStyle} resize-none`} rows="3" placeholder="Describe the issue (e.g., garbage pile near school gate)" value={description} onChange={e => setDescription(e.target.value)} required></textarea>
           </div>
 
           {/* Location */}
@@ -307,6 +306,16 @@ export default function PeopleDashboard() {
 
         {status && <p className={`mt-5 text-center text-sm p-3 rounded-md ${getStatusClasses()}`}>{status}</p>}
         {mapsLink && <a className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4" href={mapsLink} target="_blank" rel="noreferrer">View on Google Maps</a>}
+
+        {/* ✅ New Complaint Status Button */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => navigate('/people/chat')}
+            className="bg-green-700 hover:bg-green-800 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-all"
+          >
+            Complaint Status
+          </button>
+        </div>
       </div>
     </div>
   )
