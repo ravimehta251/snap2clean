@@ -307,13 +307,16 @@ export default function PeopleDashboard() {
         {status && <p className={`mt-5 text-center text-sm p-3 rounded-md ${getStatusClasses()}`}>{status}</p>}
         {mapsLink && <a className="block text-center text-sm text-green-700 hover:text-green-900 underline mt-4" href={mapsLink} target="_blank" rel="noreferrer">View on Google Maps</a>}
 
-        {/* ✅ New Complaint Status Button */}
-        <div className="mt-8 text-center">
+        {/* ✅ New Complaint Chat Button */}
+        <div className="mt-10 text-center">
+          <p className="text-sm text-gray-600 mb-3">
+            Want to chat or check your complaint status?
+          </p>
           <button
-            onClick={() => navigate('/people/chat')}
-            className="bg-green-700 hover:bg-green-800 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-all"
+            onClick={() => navigate('/chat')}
+            className="bg-green-700 hover:bg-green-800 text-white font-semibold px-6 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-600 transition-all duration-200"
           >
-            Complaint Status
+            Open Complaint Chat
           </button>
         </div>
       </div>

@@ -10,24 +10,26 @@ import SignUp from "./components/authority/SignUp.jsx";
 import Dashboard from "./components/authority/Dashboard.jsx";
 import ComplaintDetails from "./components/authority/ComplaintDetails.jsx";
 import PeopleDashboard from "./components/PeopleDashboard.jsx";
-import PeopleChat from "./components/peoplechat.jsx";
-
-
-  // ✅ Fixed path
+import PeopleChat from "./components/Peoplechat.jsx";  // ✅ Added chat component import
 
 import "./styles.css";
 
 createRoot(document.getElementById("root")).render(
   <Router>
     <Routes>
+      {/* 🌍 Public Landing */}
       <Route path="/" element={<LandingPage />} />
+
+      {/* 🏛️ Authority Section */}
       <Route path="/authority" element={<Entry />} />
       <Route path="/authority/signin" element={<SignIn />} />
       <Route path="/authority/signup" element={<SignUp />} />
       <Route path="/authority/dashboard" element={<Dashboard />} />
       <Route path="/authority/complaint/:id" element={<ComplaintDetails />} />
+
+      {/* 👥 People Section */}
       <Route path="/people" element={<PeopleDashboard />} />
-      <Route path="/people/chat" element={<PeopleChat />} />
+      <Route path="/chat" element={<PeopleChat />} />  {/* ✅ Chat route */}
     </Routes>
   </Router>
 );
