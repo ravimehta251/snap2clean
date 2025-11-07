@@ -125,7 +125,7 @@ export default function PeopleDashboard() {
               Track Your Complaint
             </h2>
 
-            {/* Input for Complaint ID */}
+            {/* Input for Complaint ID added sum data*/}
             <div className="flex gap-2 mb-4">
               <input
                 type="text"
