@@ -10,7 +10,10 @@ import SignUp from "./components/authority/SignUp.jsx";
 import Dashboard from "./components/authority/Dashboard.jsx";
 import ComplaintDetails from "./components/authority/ComplaintDetails.jsx";
 import PeopleDashboard from "./components/PeopleDashboard.jsx";
-import PeopleChat from "./components/PeopleChat.jsx";  // ✅ Fixed path
+import PeopleChat from "./components/peoplechat.jsx";
+
+
+  // ✅ Fixed path
 
 import "./styles.css";
 
