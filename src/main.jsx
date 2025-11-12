@@ -10,7 +10,7 @@ import SignUp from "./components/authority/SignUp.jsx";
 import Dashboard from "./components/authority/Dashboard.jsx";
 import ComplaintDetails from "./components/authority/ComplaintDetails.jsx";
 import PeopleDashboard from "./components/PeopleDashboard.jsx";
-import PeopleChat from "./components/Peoplechat.jsx";  // Make sure the case matches exactly  // ✅ Added chat component import
+import PeopleChat from "./components/Peoplechat.jsx";  // ✅ Chat component import
 
 import "./styles.css";
 
