@@ -22,7 +22,7 @@ export default function LandingPage() {
             onClick={() => navigate('/people')}
             className="transform transition duration-150 ease-in-out hover:scale-105 bg-lime-600 hover:bg-lime-500 text-white font-semibold py-3 rounded-md"
           >
-            People
+            Citizen
           </button>
         </div>
       </div>
